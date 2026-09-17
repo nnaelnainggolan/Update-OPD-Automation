@@ -1,0 +1,13 @@
+PATCH v2.6
+Ganti capture_report.py DAN screenshot_reader.py di ruijie-auto-report.
+Jalankan 05_LOGIN_DAN_CAPTURE.bat. Login kemudian Enter di terminal.
+Program membaca tanggal dan batas grafik melalui OCR screenshot, bukan DOM.
+Bila grafik belum lengkap, panel digulir bertahap maksimal lima kali.
+Sebelum memilih jaringan berikutnya, panel digulir kembali ke bagian port.
+No Data hanya diperiksa pada Speed Summary, dibatasi sebelum Link/DNS Probe Trend.
+Hasil screenshot utuh dan grafik tetap disimpan di captures.
+Tanggal harus kemarin-hari ini; jika salah, berhenti dan tidak mengganti tanggal otomatis.
+Diuji pada diagnostic_METRO.png dan diagnostic_BROADBAND.png pengguna:
+keduanya rentang 16-17 September 2026, grafik ada, No Data false.
+Navigasi scroll langsung tetap perlu diuji di laptop pengguna.
+Belum menulis Excel/Drive atau memasang jadwal otomatis.
