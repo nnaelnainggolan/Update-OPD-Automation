@@ -136,24 +136,95 @@ def ensure_tenant(page, target):
     raise RuntimeError('Tenant tujuan belum terverifikasi pada header profil. Lihat diagnostic.png.')
 
 
-def navigate(page, cfg, already_open=False):
+
+def project_heading_visible(page, name):
+    # Workspace heading, excluding the left selector and its floating tree.
+    for item in visible(page.get_by_text(name, exact=True)):
+        box = item.bounding_box()
+        if box and box['x'] >= 210 and 50 <= box['y'] < 180:
+            return True
+    return False
+
+
+def project_search(page, timeout=10000):
+    """Filter the observed left popup before testing uniqueness (1440px viewport)."""
+    deadline = time.monotonic() + timeout / 1000
+    while time.monotonic() < deadline:
+        candidates = []
+        for item in visible(page.get_by_placeholder('Search', exact=True)):
+            box = item.bounding_box()
+            if box and 0 <= box['x'] < 400 and 100 <= box['y'] < 400:
+                candidates.append(item)
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            raise RuntimeError('Popup project memiliki lebih dari satu pencarian; navigasi dihentikan.')
+        page.wait_for_timeout(200)
+    raise RuntimeError('Kotak Search di popup project kiri belum terlihat setelah 10 detik.')
+
+
+def select_project(page, name):
+    click_unique(page.get_by_text('Project', exact=True), 'Menu Project')
+    page.wait_for_timeout(800)
+    if not project_heading_visible(page, name):
+        # Bounded visual fallback from diagnostic_navigation.png, 1440px viewport.
+        # Hover opens the project selector; selection uses exact text.
+        if not page.viewport_size or page.viewport_size['width'] != 1440:
+            raise RuntimeError('Pemilih project memerlukan viewport 1440px.')
+        page.mouse.move(100, 84)
+        logging.info('Hover nama project; menunggu popup daftar project')
+        search = project_search(page)
+        search.fill(name)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            matches = []
+            for item in visible(page.get_by_text(name, exact=True)):
+                box = item.bounding_box()
+                if box and box['x'] < 400 and box['y'] >= 140:
+                    matches.append(item)
+            if len(matches) > 1:
+                raise RuntimeError(f'Pilihan project {name} ambigu; navigasi dihentikan.')
+            if len(matches) == 1:
+                matches[0].click()
+                break
+            page.wait_for_timeout(200)
+        else:
+            raise RuntimeError(f'Project {name} tidak ditemukan pada dropdown setelah pencarian.')
+        page.keyboard.press('Escape')
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        if project_heading_visible(page, name):
+            logging.info('Project terverifikasi pada judul workspace: %s', name)
+            return
+        page.wait_for_timeout(200)
+    raise RuntimeError(f'Judul workspace belum menunjukkan {name}; capture dibatalkan.')
+
+
+def navigate(page, cfg, already_open=False, check_tenant=True):
     logging.info('Memeriksa dashboard pada browser yang sama' if already_open else 'Membuka Home dan memeriksa sesi login')
     if not already_open:
         page.goto(cfg['url'], wait_until='domcontentloaded')
     page.wait_for_timeout(2500)
     if '/sso/' in page.url or page.get_by_role('textbox', name='Password', exact=True).is_visible():
         raise RuntimeError('Halaman masih meminta login. Gunakan 05_LOGIN_DAN_CAPTURE.bat untuk login dan capture dalam browser yang sama.')
-    ensure_tenant(page, cfg['tenant'])
-    page.keyboard.press('Escape')
-    logging.info('Tenant terverifikasi: %s', cfg['tenant'])
-    page.get_by_text('Project', exact=True).click(timeout=20000)
-    # These two project selectors and the device selector come from the recording.
-    page.locator('div').filter(has_text=re.compile('^' + re.escape(cfg['project']) + '$')).nth(2).click(timeout=20000)
-    page.get_by_text('-BAPPERIDA-PROVSU').nth(3).click(timeout=20000)
-    page.locator('.virtual-topo__icon').first.click(timeout=20000)
-    page.locator('#node_' + cfg['device_serial'] + ' > .devices-box').click(timeout=20000)
+    if check_tenant:
+        ensure_tenant(page, cfg['tenant'])
+        page.keyboard.press('Escape')
+        logging.info('Tenant terverifikasi: %s', cfg['tenant'])
+    else:
+        logging.info('Melanjutkan dalam tenant batch: %s', cfg['tenant'])
+    select_project(page, cfg['project'])
+    click_unique(page.get_by_text('View Topology', exact=True), 'View Topology')
+    if cfg.get('auto_discover'):
+        from auto_discovery import choose_gateway
+        cfg['device_serial'] = choose_gateway(page)
+    else:
+        page.locator('#node_' + cfg['device_serial'] + ' > .devices-box').click(timeout=20000)
     page.get_by_text('Egress Traffic Trend', exact=True).click(timeout=20000)
     page.get_by_text(re.compile(re.escape(cfg['device_serial']))).first.wait_for(state='visible', timeout=20000)
+    if cfg.get('auto_discover'):
+        from auto_discovery import resolve_ports
+        resolve_ports(page, cfg, click_unique)
     logging.info('Gateway project pengujian terbuka')
 
 
@@ -186,7 +257,7 @@ def capture_link(page, cfg, link, folder, executable, today):
     page.mouse.wheel(0, -2200)
     page.wait_for_timeout(600)
     click_unique(page.get_by_text(port, exact=True), port)
-    description = 'Metro Iforte' if link == 'METRO' else 'Broadband Nusanet'
+    description = cfg.get('descriptions', {}).get(link) or ('Metro Iforte' if link == 'METRO' else 'Broadband Nusanet')
     page.get_by_text(description, exact=True).wait_for(state='visible', timeout=20000)
     # Chart headings may be drawn on canvas and absent from DOM inner_text.
     original = folder / f"{cfg['project']}_{link}_original.png"
@@ -218,7 +289,7 @@ def capture_link(page, cfg, link, folder, executable, today):
 
 def login_in_context(context, page, cfg):
     page.goto(cfg['url'], wait_until='domcontentloaded')
-    print('MODE UJI v2.6: LOGIN DAN CAPTURE DALAM SATU BROWSER')
+    print('MODE CAPTURE v2.10.1: LOGIN DAN CAPTURE DALAM SATU BROWSER')
     print('Klik Login dan selesaikan verifikasi secara manual sampai Home/dashboard muncul.')
     print('Jangan tutup browser dan jangan menjalankan 02/04 bersamaan.')
     input('Saat dashboard Home terbuka, tekan Enter di terminal ini untuk MULAI CAPTURE: ')
@@ -275,6 +346,16 @@ def main():
                         logging.info('Diagnostik jaringan tersimpan: diagnostic_%s.png dan .txt', link)
                     except Exception:
                         logging.warning('Tidak dapat menyimpan diagnostik jaringan %s', link)
+            try:
+                from excel_report import save_reports
+                excel_result = save_reports(results, folder, cfg, ROOT)
+                (folder / 'excel_result.json').write_text(
+                    json.dumps(excel_result, indent=2, ensure_ascii=False), encoding='utf-8')
+            except Exception as exc:
+                logging.error('Penyimpanan Excel gagal: %s. Gambar tetap tersedia di captures.', exc)
+                (folder / 'excel_result.json').write_text(
+                    json.dumps({'status':'failed','error':str(exc)}, indent=2), encoding='utf-8')
+                return 1
             return 0 if all(r['status'] != 'failed' for r in results) else 1
         except Exception as exc:
             logging.error('Navigasi berhenti: %s', exc)

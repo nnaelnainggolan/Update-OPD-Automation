@@ -1,0 +1,40 @@
+[
+  {
+    "enabled": true,
+    "project": "05-BAPPERIDA-PROVSU",
+    "report_sheet": "05-BAPPELITBANG-PROVSU",
+    "device_serial": "H1U61QY000029",
+    "ports": {
+      "METRO": "LAN5/WAN2",
+      "BROADBAND": "LAN6/WAN1"
+    },
+    "port_marks": {
+      "METRO": "S",
+      "BROADBAND": "P"
+    },
+    "descriptions": {
+      "METRO": "Metro Iforte",
+      "BROADBAND": "Broadband Nusanet"
+    },
+    "auto_discover": true
+  },
+  {
+    "enabled": true,
+    "project": "12-DINKES-PROVSU",
+    "report_sheet": "12-DINKES-PROVSU",
+    "device_serial": "H1TS50200105A",
+    "ports": {
+      "METRO": "WAN0",
+      "BROADBAND": "LAN8/WAN1"
+    },
+    "port_marks": {
+      "METRO": "S",
+      "BROADBAND": "P"
+    },
+    "descriptions": {
+      "METRO": "Metro Iforte",
+      "BROADBAND": "Broadband Nusanet"
+    },
+    "auto_discover": true
+  }
+]

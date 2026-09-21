@@ -1,16 +1,21 @@
-# Riwayat perubahan
+# v2.10.1 — 36 project
 
-- v2.6 + dokumentasi (17 September 2026): paket lengkap kode saat ini dan panduan;
-  tidak menambah fungsi atau mengubah alur v2.6.
-- v2.6: OCR sebagai pembaca tanggal/grafik, scroll jika belum terbaca, batasi No Data
-  pada Speed Summary. Dua hasil jaringan telah dikonfirmasi lewat lampiran pengguna.
-- v2.5: pilih elemen port yang terlihat, diagnostik per jaringan.
-- v2.4: buka avatar melalui hover/klik pada viewport tetap; tenant dan gateway berhasil.
-- v2.3: verifikasi header tenant tanpa mengharuskan label Admin.
-- v2.2: login dan capture dalam context browser yang sama.
-- v2.1: penutupan browser lebih aman dan simpan/pulihkan sessionStorage;
-  belum menyelesaikan pemulihan sesi secara andal.
-- Tahap 2: navigasi satu project, capture lokal, crop dan validasi tanggal.
-- Tahap 1: browser khusus dan perekaman navigasi.
+v2.10.1: aktifkan SEKRETARIAT dan HQ; tambah networks per project; HQ METRO saja; izinkan pembuatan sheet HQ saat penyimpanan, tanpa melonggarkan pemeriksaan sheet project lain; perbarui seluruh tabel dan status.
 
-Versi manual terpisah terakhir: v16. Kodenya tidak disertakan dalam ZIP otomatis ini.
+## Riwayat versi sebelumnya
+
+# Changelog
+
+## v2.10
+- Tambah pemetaan 32 project aktif dari screenshot; total 34 aktif, 2 pending.
+- Simpan semua 36 entri sesuai urutan Ruijie.
+- Tambah PEMETAAN_PROJECT.csv dengan SN, port, sheet, status dan bukti screenshot.
+- Tambah pemeriksaan read-only laporan tanggal hari ini dan seluruh sheet sebelum browser dibuka.
+- Log project nonaktif beserta alasan kelengkapan data.
+- Tambah mode uji dua project lama melalui 08_UJI_2_PROJECT.bat.
+- Tidak menebak Broadband SEKRETARIAT/HQ; tidak menimpa config.json atau excel_config.json.
+
+## Riwayat relevan
+v2.8.4: navigasi dua project dan penyimpanan Excel dikonfirmasi berhasil oleh pengguna.
+v2.9–v2.9.2: eksperimen deteksi otomatis; pengguna memilih kembali pemetaan tetap.
+v2.9.3: urutan project berdasarkan screenshot Ruijie.
