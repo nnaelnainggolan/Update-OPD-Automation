@@ -8,3 +8,4 @@ auth/
 backups/
 *.opd.lock
 excel_config.json
+notify_config.json

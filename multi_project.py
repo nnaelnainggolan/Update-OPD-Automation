@@ -12,6 +12,7 @@ from capture_report import (ROOT, WIB, login_in_context, navigate, capture_link,
                             close_safely, restore_session, wait_visible_unique, ensure_tenant)
 from excel_report import save_reports
 from report_preflight import check_report
+from notifier import notify_batch
 
 
 def load_projects(path):
@@ -188,6 +189,10 @@ def main():
             logging.exception('Proses batch berhenti.'); return 1
         finally:
             (run_dir/'batch_summary.json').write_text(json.dumps(outcomes,indent=2),encoding='utf-8')
+            try:
+                notify_batch(outcomes, projects, run_dir, ROOT, today)
+            except Exception:
+                logging.exception('Notifikasi gagal; hasil batch tidak terpengaruh.')
             if context:
                 close_safely(context)
             logging.info('Hasil batch: %s',run_dir)

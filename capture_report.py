@@ -14,7 +14,7 @@ import time
 
 from PIL import Image, ImageEnhance, ImageOps
 from playwright.sync_api import sync_playwright
-from screenshot_reader import analyze
+from screenshot_reader import analyze, detect_port_color, port_strip_box
 from session_helper import restore_session, close_safely
 
 ROOT = Path(__file__).resolve().parent
@@ -228,25 +228,69 @@ def navigate(page, cfg, already_open=False, check_tenant=True):
     logging.info('Gateway project pengujian terbuka')
 
 
+def _ocr_tsv(image, executable):
+    with tempfile.TemporaryDirectory() as temp:
+        input_path = Path(temp) / 'ocr.png'
+        image.save(input_path)
+        result = subprocess.run([executable, str(input_path), 'stdout', '--psm', '11', 'tsv'],
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if result.returncode:
+        raise RuntimeError('Tesseract gagal: ' + result.stderr[:200])
+    # QUOTE_NONE wajib: TSV Tesseract tidak memakai tanda kutip. Tanpa ini, satu token noise berupa "
+    # membuka 'sel berkutip' yang menelan puluhan baris berikutnya (termasuk legenda Uplink/Downlink).
+    return list(csv.DictReader(io.StringIO(result.stdout), delimiter='\t', quoting=csv.QUOTE_NONE))
+
+
 def crop_original(path, executable, today):
     with Image.open(path) as src:
         original = src.convert('RGB')
-        prepared = ImageEnhance.Contrast(ImageOps.grayscale(original)).enhance(2.2)
+        gray = ImageOps.grayscale(original)
+        # Pass 1: pipeline asli (baik untuk grafik dan legenda berwarna).
+        prepared = ImageEnhance.Contrast(gray).enhance(2.2)
         prepared = prepared.resize((prepared.width * 2, prepared.height * 2))
-        with tempfile.TemporaryDirectory() as temp:
-            input_path = Path(temp) / 'ocr.png'
-            prepared.save(input_path)
-            result = subprocess.run([executable, str(input_path), 'stdout', '--psm', '11', 'tsv'],
-                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45,
-                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-            if result.returncode:
-                raise RuntimeError('Tesseract gagal: ' + result.stderr[:200])
-            info = analyze(list(csv.DictReader(io.StringIO(result.stdout), delimiter='\t')), original.size)
+        try:
+            info = analyze(_ocr_tsv(prepared, executable), original.size)
+        except ValueError as first_error:
+            # Pass 2 (cadangan): teks "No Data" berwarna abu-abu muda hilang pada kontras 2.2.
+            # Threshold keras mempertahankannya. Hanya dipakai bila pass 1 gagal menemukan batas grafik.
+            if 'Batas grafik tidak terbaca' not in str(first_error):
+                raise
+            hard = gray.point(lambda v: 0 if v < 235 else 255)
+            hard = hard.resize((hard.width * 2, hard.height * 2))
+            info = analyze(_ocr_tsv(hard, executable), original.size)
+            if not info['no_data']:
+                raise first_error
+            logging.info('Pass cadangan OCR: No Data terbaca pada Speed Summary')
         if info['date'] != today or info['start_date'] != today - timedelta(days=1):
             raise ValueError('Tanggal OCR berbeda dari tanggal target.')
         crop = path.with_name(path.stem.replace('_original', '_graph') + '.png')
         original.crop(info['box']).save(crop)
         return crop, info
+
+
+def read_port_color(original, folder, project, link):
+    """Baca warna port terpilih dari screenshot. Kuning = link 10M/100M (di bawah 100 Mbps).
+
+    Kegagalan membaca warna tidak menghentikan capture; hasilnya None.
+    """
+    try:
+        with Image.open(original) as src:
+            image = src.convert('RGB')
+            found = detect_port_color(image)
+            if not found:
+                logging.warning('%s / %s: sorotan port tidak ditemukan; warna port tidak dibaca.', project, link)
+                return None
+            state = {'color': found['color'], 'image': None}
+            if found['color'] == 'yellow':
+                strip = folder / f'{project}_{link}_port.png'
+                image.crop(port_strip_box(found['box'], image.size)).save(strip)
+                state['image'] = strip.name
+                logging.warning('%s / %s: PORT KUNING (10M/100M, di bawah 100 Mbps).', project, link)
+            return state
+    except Exception as exc:
+        logging.warning('%s / %s: warna port gagal dibaca (%s).', project, link, exc)
+        return None
 
 
 def capture_link(page, cfg, link, folder, executable, today):
@@ -262,9 +306,13 @@ def capture_link(page, cfg, link, folder, executable, today):
     # Chart headings may be drawn on canvas and absent from DOM inner_text.
     original = folder / f"{cfg['project']}_{link}_original.png"
     last_error = None
+    port_state = None
     for attempt in range(6):
         page.wait_for_timeout(2500)
         page.screenshot(path=str(original), animations='disabled')
+        if port_state is None:
+            # Baca warna port selagi deretan port terlihat (sebelum panel di-scroll).
+            port_state = read_port_color(original, folder, cfg['project'], link)
         try:
             crop, info = crop_original(original, executable, today)
             if info['links'] and info['links'] != {link}:
@@ -284,6 +332,8 @@ def capture_link(page, cfg, link, folder, executable, today):
         raise RuntimeError(f'Grafik tidak terbaca: {last_error}')
     return {'network': link, 'port': port, 'status': 'no_data' if info['no_data'] else 'graph_present',
             'original': original.name, 'graph': crop.name, 'date': today.isoformat(),
+            'port_color': port_state['color'] if port_state else None,
+            'port_image': port_state['image'] if port_state else None,
             'review_required': True}
 
 

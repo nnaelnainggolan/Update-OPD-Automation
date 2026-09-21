@@ -1,0 +1,26 @@
+{
+  "url": "https://cloud-as.ruijienetworks.com/macc5/adminIntl/#/monitor_overview_global_menu",
+  "tenant": "mmahmuda18@gmail.com",
+  "project": "05-BAPPERIDA-PROVSU",
+  "report_sheet": "05-BAPPELITBANG-PROVSU",
+  "date_range": "yesterday_to_today",
+  "timezone": "Asia/Jakarta",
+  "planned_schedule": {
+    "days": [
+      "MON",
+      "TUE",
+      "WED",
+      "THU",
+      "FRI"
+    ],
+    "time": "14:00"
+  },
+  "stage": "capture_and_excel",
+  "drive_writes_enabled": true,
+  "device_serial": "H1U61QY000029",
+  "ports": {
+    "METRO": "LAN5/WAN2",
+    "BROADBAND": "LAN6/WAN1"
+  },
+  "tesseract_command": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+}
